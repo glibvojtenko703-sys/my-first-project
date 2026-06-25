@@ -4,131 +4,115 @@
     <meta charset="UTF-8">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
     <title>Rover Control</title>
     
     <style>
-        /* Скидання стандартних відступів та заборона виділення тексту/зуму */
         body {
             margin: 0;
             padding: 0;
-            background-color: #1c1c1e; /* Темна тема, як в iOS */
+            background-color: #1c1c1e;
             color: white;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, sans-serif;
             display: flex;
-            flex-direction: column;
+            justify-content: space-between; /* Розносить панелі по краях */
             align-items: center;
-            justify-content: center;
             height: 100vh;
-            touch-action: none; /* Блокує скролінг екрана пальцем */
-            user-select: none;  /* Блокує виділення тексту */
-        }
-
-        h1 {
-            position: absolute;
-            top: 40px;
-            font-size: 24px;
-            color: #e5e5ea;
+            width: 100vw;
+            touch-action: none;
+            user-select: none;
+            overflow: hidden; /* Забороняє прокрутку */
         }
 
         #status {
             position: absolute;
-            top: 80px;
-            font-size: 14px;
-            color: #ff453a; /* Червоний, коли немає зв'язку */
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 16px;
+            color: #ff453a;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        /* Налаштування сітки для кнопок (Хрестовина) */
-        .d-pad {
-            display: grid;
-            grid-template-columns: 80px 80px 80px;
-            grid-template-rows: 80px 80px 80px;
-            gap: 15px;
-        }
-
-        /* Дизайн самих кнопок */
+        /* Спільний стиль для кнопок */
         .btn {
             background-color: #3a3a3c;
             border: 2px solid #2c2c2e;
-            border-radius: 15px;
+            border-radius: 50%; /* Робимо кнопки круглими */
             color: white;
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 36px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            transition: background-color 0.1s;
+            width: 90px;
+            height: 90px;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4);
+            transition: background-color 0.1s, transform 0.1s;
         }
 
         .btn:active {
-            background-color: #0a84ff; /* Синій колір при натисканні (iOS style) */
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-            transform: translateY(2px);
+            background-color: #ff9f0a; /* Оранжевий колір при натисканні (як на референсі) */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+            transform: translateY(4px);
         }
 
-        /* Розміщення кнопок у сітці */
-        #btn-forward { grid-column: 2; grid-row: 1; }
-        #btn-left    { grid-column: 1; grid-row: 2; }
-        #btn-right   { grid-column: 3; grid-row: 2; }
-        #btn-backward{ grid-column: 2; grid-row: 3; }
+        /* Ліва панель (Газ / Гальмо) */
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            margin-left: 50px;
+        }
+
+        /* Права панель (Вліво / Вправо) */
+        .right-panel {
+            display: flex;
+            flex-direction: row;
+            gap: 30px;
+            margin-right: 50px;
+        }
     </style>
 </head>
 <body>
 
-    <h1>Пульт Керування</h1>
     <div id="status">🔴 Відключено</div>
 
-    <div class="d-pad">
-        <div id="btn-forward" class="btn">Вперед</div>
-        <div id="btn-left" class="btn">Вліво</div>
-        <div id="btn-right" class="btn">Вправо</div>
-        <div id="btn-backward" class="btn">Назад</div>
+    <div class="left-panel">
+        <div id="btn-forward" class="btn">▲</div>
+        <div id="btn-backward" class="btn">▼</div>
+    </div>
+
+    <div class="right-panel">
+        <div id="btn-left" class="btn">◀</div>
+        <div id="btn-right" class="btn">▶</div>
     </div>
 
     <script>
-        // IP-адреса, яку ми згодом призначимо нашій ESP32
         const gateway = 'ws://192.168.4.1:81'; 
         let websocket;
         const statusDiv = document.getElementById('status');
 
-        // Ініціалізація WebSocket з'єднання
         function initWebSocket() {
-            console.log('Спроба підключення до WebSockets...');
             websocket = new WebSocket(gateway);
-            
-            websocket.onopen = onOpen;
-            websocket.onclose = onClose;
-            websocket.onerror = onError;
+            websocket.onopen = () => {
+                statusDiv.innerText = "🟢 Підключено";
+                statusDiv.style.color = "#32d74b";
+            };
+            websocket.onclose = () => {
+                statusDiv.innerText = "🔴 Відключено";
+                statusDiv.style.color = "#ff453a";
+                setTimeout(initWebSocket, 2000);
+            };
         }
 
-        function onOpen(event) {
-            statusDiv.innerText = "🟢 Підключено";
-            statusDiv.style.color = "#32d74b"; // Зелений
-        }
-
-        function onClose(event) {
-            statusDiv.innerText = "🔴 Відключено";
-            statusDiv.style.color = "#ff453a";
-            // Спроба перепідключитися через 2 секунди, якщо зв'язок обірвався
-            setTimeout(initWebSocket, 2000);
-        }
-
-        function onError(event) {
-             console.log("Помилка WebSocket", event);
-        }
-
-        // Функція для відправки JSON команди
         function sendCommand(action) {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
-                const message = JSON.stringify({ action: action });
-                websocket.send(message);
-                console.log("Відправлено:", message);
+                websocket.send(JSON.stringify({ action: action }));
             }
         }
 
-        // Прив'язка подій до кнопок
-        // Використовуємо pointerdown/up, щоб працювало і від мишки на ПК, і від пальця на iPhone
         const buttons = {
             'btn-forward': 'forward',
             'btn-backward': 'backward',
@@ -138,27 +122,11 @@
 
         for (const [id, action] of Object.entries(buttons)) {
             const btn = document.getElementById(id);
-            
-            // Коли палець торкається екрана
-            btn.addEventListener('pointerdown', (e) => {
-                e.preventDefault(); 
-                sendCommand(action);
-            });
-
-            // Коли палець відривається від екрана
-            btn.addEventListener('pointerup', (e) => {
-                e.preventDefault();
-                sendCommand('stop');
-            });
-
-            // Якщо палець зісковзнув з кнопки під час натискання
-            btn.addEventListener('pointerleave', (e) => {
-                e.preventDefault();
-                sendCommand('stop'); // Запобігає ситуації, коли машинка їде нескінченно
-            });
+            btn.addEventListener('pointerdown', (e) => { e.preventDefault(); sendCommand(action); });
+            btn.addEventListener('pointerup', (e) => { e.preventDefault(); sendCommand('stop'); });
+            btn.addEventListener('pointerleave', (e) => { e.preventDefault(); sendCommand('stop'); });
         }
 
-        // Запуск підключення при завантаженні сторінки
         window.addEventListener('load', initWebSocket);
     </script>
 </body>
